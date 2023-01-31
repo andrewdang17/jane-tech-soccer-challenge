@@ -1,4 +1,4 @@
-class TopTeams
+class TopTeamsAggregator
   attr_reader :scores
 
   TEAM_INPUTS_REGEX = /\b\w+ \d+/ # word(s) followed by a space and number
@@ -10,6 +10,7 @@ class TopTeams
   def initialize
     @matchday_number = 1
     @scores = {}
+    @top_three_teams = {}
     @games_played = 0
     @number_of_teams = 0
   end
@@ -34,11 +35,31 @@ class TopTeams
     end
 
     update_team_scores!(team1, team2)
+    update_top_three_teams!(team1, team2)
 
     if matchday_ended?
       print_results
       reset_matchday!
     end
+  end
+
+  def middle_of_matchday?
+    # If number_of_teams hasn't been determined and the stream
+    # is interrupted before then we want to print the result
+    # (see last part of main.rb)
+    return true if @number_of_teams.zero?
+
+    @games_played > 1 && !matchday_ended?
+  end
+
+  def print_results
+    puts "Matchday #{@matchday_number}"
+
+    @top_three_teams.each do |team_name, score|
+      puts "#{team_name}, #{score} #{score == 1 ? "pt" : "pts"}"
+    end
+
+    print "\n"
   end
 
   private
@@ -81,22 +102,22 @@ class TopTeams
     end
   end
 
-  def matchday_ended?
-    @number_of_teams / 2 == @games_played
+  def update_top_three_teams!(team1, team2)
+    scores_to_sort = if @top_three_teams.size < 4
+      @scores
+    else
+      {
+        **@top_three_teams,
+        team1.name => @scores[team1.name],
+        team2.name => @scores[team2.name]
+      }
+    end
+
+    @top_three_teams = scores.sort_by { |k, v| [-v, k] }.first(3)
   end
 
-  def print_results
-    puts "Matchday #{@matchday_number}"
-
-    @scores
-      .sort_by { |k, v| [-v, k] }
-      .first(3)
-      .each do |team|
-        points = team[1] == 1 ? "pt" : "pts"
-        puts "#{team[0]}, #{team[1]} #{points}"
-      end
-
-    print "\n"
+  def matchday_ended?
+    @number_of_teams / 2 == @games_played
   end
 
   def reset_matchday!
